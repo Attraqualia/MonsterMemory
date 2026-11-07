@@ -1,0 +1,5 @@
+error: MonsterMemory tables cannot be generic or contain lifetimes; define a concrete record type
+ --> tests/ui/generic_table.rs:4:15
+  |
+4 | struct Generic<T> {
+  |               ^^^

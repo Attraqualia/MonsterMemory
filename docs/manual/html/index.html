@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MonsterMemory 開発者マニュアル</title><meta name="description" content="MonsterMemory 0.1 alpha 日本語開発者マニュアル">
+<style>
+:root{--bg:#f7f7f5;--panel:#fff;--text:#202124;--muted:#5f6368;--accent:#9c3b18;--line:#d8d8d4;--code:#202328}
+@media(prefers-color-scheme:dark){:root{--bg:#151719;--panel:#1d2023;--text:#e8eaed;--muted:#aeb4ba;--accent:#f29b6d;--line:#3b4045;--code:#101214}}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.72 system-ui,"Yu Gothic UI",sans-serif}
+a{color:var(--accent)}a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.layout{display:grid;grid-template-columns:280px minmax(0,1fr)}nav{position:sticky;top:0;height:100vh;overflow:auto;padding:1.4rem;background:var(--panel);border-right:1px solid var(--line)}
+nav strong{font-size:1.2rem}nav a{display:block;padding:.28rem 0;color:var(--muted);text-decoration:none}nav a:hover{color:var(--accent)}
+main{width:min(900px,calc(100% - 3rem));margin:0 auto;padding:3rem 0 8rem}h1{font-size:clamp(2rem,5vw,3.6rem);line-height:1.05}h2{margin-top:4rem;padding-top:1rem;border-top:1px solid var(--line);font-size:1.65rem}code{font-family:"Cascadia Code",Consolas,monospace}p code,li code{background:var(--panel);padding:.12rem .3rem;border:1px solid var(--line);border-radius:4px}
+.code{position:relative}pre{overflow:auto;background:var(--code);color:#f2f2ef;padding:1.3rem;border-radius:8px;line-height:1.5}.copy{position:absolute;right:.6rem;top:.6rem}aside{border-left:5px solid var(--accent);background:var(--panel);padding:.8rem 1rem;margin:1rem 0}.tools{display:flex;gap:.5rem;margin:1rem 0}input{width:100%;padding:.55rem}
+@media(max-width:800px){.layout{display:block}nav{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line)}nav .chapters{display:none}main{width:min(100% - 2rem,900px);padding-top:1.5rem}}
+@media print{nav,.tools,.copy{display:none!important}.layout{display:block}main{width:100%;padding:0}pre{white-space:pre-wrap}}
+</style></head><body><div class="layout"><nav aria-label="章ナビゲーション"><strong>MonsterMemory</strong><div>v0.1.0-alpha.1</div>
+<div class="tools"><input id="search" type="search" placeholder="本文を検索" aria-label="本文を検索"><button onclick="window.print()">Print</button></div><div class="chapters"><a href="#overview">Overview</a><a href="#5-minute-quick-start">5-minute Quick Start</a><a href="#installation">Installation</a><a href="#schema-definition">Schema Definition</a><a href="#primary-key">Primary Key</a><a href="#secondary---unique-index">Secondary / Unique Index</a><a href="#range---composite-index">Range / Composite Index</a><a href="#crud">CRUD</a><a href="#batch-write---bulk-load">Batch Write / Bulk Load</a><a href="#transactions">Transactions</a><a href="#snapshot---mvcc-semantics">Snapshot / MVCC Semantics</a><a href="#concurrency-model">Concurrency Model</a><a href="#error-handling">Error Handling</a><a href="#validation">Validation</a><a href="#persistence---durability">Persistence / Durability</a><a href="#schema-evolution">Schema Evolution</a><a href="#compaction---memory-reclamation">Compaction / Memory Reclamation</a><a href="#performance-tuning">Performance Tuning</a><a href="#metrics---tracing">Metrics / Tracing</a><a href="#testing-strategy">Testing Strategy</a><a href="#architecture">Architecture</a><a href="#safety-invariants">Safety Invariants</a><a href="#benchmark-methodology-and-results">Benchmark Methodology and Results</a><a href="#migration-guide">Migration Guide</a><a href="#troubleshooting">Troubleshooting</a><a href="#faq">FAQ</a><a href="#feature-flags">Feature Flags</a><a href="#msrv---platform-support">MSRV / Platform Support</a><a href="#security---corrupt-input-handling">Security / Corrupt Input Handling</a><a href="#api-reference">API Reference</a></div></nav>
+<main id="content"><h1>MonsterMemory 開発者マニュアル</h1><p>An Attraqualia project, developed by halnos.</p><p>Version 0.1.0-alpha.1。本文はJavaScriptなしでも読めます。JavaScript有効時は検索とcopy buttonが使えます。保守担当はhalnosです。</p><aside role="note">Alpha: APIとcheckpoint formatは変更され得ます。未検証のProduction Ready、lock-free writer、Serializableを表明しません。</aside><section><h2 id="overview">Overview</h2><p>MonsterMemoryはRust structとderive attributesからtyped CRUD、index query、database-wide snapshot、multi-table write transactionを生成するembedded in-memory databaseです。通常利用で必要な概念はDatabase、Table、Read/query、Write、Snapshot/transactionの5つです。</p></section><section><h2 id="5-minute-quick-start">5-minute Quick Start</h2><p>次はCIでコンパイルを確認する実ファイルです。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-rust">// included from crates/monstermemory/examples/quickstart.rs
+#![allow(missing_docs)]
+
+use monstermemory::prelude::*;
+
+#[derive(Clone, Debug, Table)]
+#[table(name = &quot;users&quot;)]
+#[composite_index(name = &quot;country_age&quot;, fields(country, age), kind = &quot;ordered&quot;)]
+pub struct User {
+    #[primary_key]
+    pub id: u64,
+    #[index(unique)]
+    pub email: String,
+    #[index]
+    pub country: String,
+    #[index(range)]
+    pub age: u16,
+}
+
+#[derive(Database)]
+pub struct AppDb {
+    pub users: Table&lt;User&gt;,
+}
+
+fn main() -&gt; monstermemory::Result&lt;()&gt; {
+    let db = AppDb::memory();
+
+    db.users.insert(User {
+        id: 1,
+        email: &quot;alice@example.com&quot;.into(),
+        country: &quot;JP&quot;.into(),
+        age: 28,
+    })?;
+
+    db.users.update(&amp;1, |user| user.age += 1)?;
+
+    let alice = db.users.get(&amp;1).expect(&quot;user exists&quot;);
+    assert_eq!(alice.age, 29);
+    assert_eq!(db.users.by_email(&quot;alice@example.com&quot;).unwrap().id, alice.id);
+    Ok(())
+}
+
+</code></pre></div></section><section><h2 id="installation">Installation</h2><p>このworkspaceのルートで<code>cargo run -p monstermemory --example quickstart</code>を実行します。別アプリケーションから使う場合はチェックアウトを<code>MonsterMemory</code>として隣に配置し、次のpath dependencyを設定します。crates.io公開は前提にしません。memory-onlyがdefaultで設定ファイルは不要です。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-toml">[dependencies]
+monstermemory = { path = &quot;../MonsterMemory/crates/monstermemory&quot; }
+</code></pre></div></section><section><h2 id="schema-definition">Schema Definition</h2><p><code>#[derive(Clone, Table)]</code>をrecordへ、<code>#[derive(Database)]</code>を<code>Table&lt;T&gt;</code> fieldだけを持つdatabase facadeへ付けます。generic/lifetime table、unknown attribute option、重複生成名はcompile errorです。</p></section><section><h2 id="primary-key">Primary Key</h2><p>各Tableは<code>#[primary_key]</code>をちょうど1つ持ちます。keyはClone + Debug + Eq + Hash + Send + Sync + 'staticが必要です。update closureがkeyを変更するとcommit前に<code>PrimaryKeyChanged</code>を返します。</p></section><section><h2 id="secondary---unique-index">Secondary / Unique Index</h2><p><code>#[index]</code>は1 keyから複数rowへのexact query、<code>#[index(unique)]</code>は<code>Option&lt;RecordRef&lt;T&gt;&gt;</code>を返します。unique制約はcurrent rootに対してcommit gate内で再検証されます。non-unique結果はstable RowId順です。</p></section><section><h2 id="range---composite-index">Range / Composite Index</h2><p><code>#[index(range)]</code>は<code>RangeBounds</code>を受け取るlazy forward iteratorを生成します。<code>#[composite_index(name = &quot;country_age&quot;, fields(country, age), kind = &quot;ordered&quot;)]</code>はlexicographic prefix + suffix range queryを生成します。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-rust">// included from crates/monstermemory/examples/indexes.rs
+#![allow(missing_docs)]
+
+use monstermemory::prelude::*;
+
+#[derive(Clone, Debug, Table)]
+#[composite_index(name = &quot;region_score&quot;, fields(region, score), kind = &quot;ordered&quot;)]
+struct Player {
+    #[primary_key]
+    id: u64,
+    #[index(unique)]
+    handle: String,
+    #[index]
+    region: String,
+    #[index(range)]
+    score: u32,
+}
+
+#[derive(Database)]
+struct GameDb {
+    players: Table&lt;Player&gt;,
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    let db = GameDb::bulk_load(|loader| {
+        loader.players.extend([
+            Player {
+                id: 1,
+                handle: &quot;moth&quot;.into(),
+                region: &quot;JP&quot;.into(),
+                score: 40,
+            },
+            Player {
+                id: 2,
+                handle: &quot;slime&quot;.into(),
+                region: &quot;JP&quot;.into(),
+                score: 80,
+            },
+            Player {
+                id: 3,
+                handle: &quot;golem&quot;.into(),
+                region: &quot;US&quot;.into(),
+                score: 60,
+            },
+        ])?;
+        Ok(())
+    })?;
+
+    assert_eq!(db.players.by_region(&quot;JP&quot;).count(), 2);
+    assert_eq!(db.players.score_range(50..=80).count(), 2);
+    assert_eq!(db.players.by_region_score((&quot;JP&quot;, 50..)).count(), 1);
+    Ok(())
+}
+
+</code></pre></div></section><section><h2 id="crud">CRUD</h2><p><code>insert</code>、<code>update</code>、<code>delete</code>、<code>upsert</code>はsingle-operation auto commitです。<code>get</code>、<code>get_cloned</code>は読み取りでありcommitを発生させません。<code>get</code>の<code>RecordRef&lt;T&gt;</code>はrecord versionのArcを保持し、database更新後も保持できます。failed writeはpublished rootを変更しません。レコード内で共有する内部可変状態はengineが固定しないため、snapshotとして固定したい値はClone後の更新で旧versionに影響しない設計が必要です。</p></section><section><h2 id="batch-write---bulk-load">Batch Write / Bulk Load</h2><p><code>insert_many</code>、<code>upsert_many</code>、<code>delete_many</code>は各callを1 transactionとしてatomic publishします。<code>Database::bulk_load</code>は全Table loaderを1 commitで公開します。現在は入力をstreamしながらpersistent structureへbatch適用し、parallel sort/buildは未実装です。</p></section><section><h2 id="transactions">Transactions</h2><p><code>write</code> closure内の複数Table操作はatomicです。closureを暗黙再実行しません。<code>retrying_write(RetryPolicy, ...)</code>だけは名前とdocumentどおり複数回実行し得るため、外部side effectを置かないでください。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-rust">// included from crates/monstermemory/examples/transactions.rs
+#![allow(missing_docs)]
+
+use monstermemory::prelude::*;
+
+#[derive(Clone, Debug, Table)]
+struct Account {
+    #[primary_key]
+    id: u64,
+    balance: i64,
+}
+
+#[derive(Clone, Debug, Table)]
+struct Audit {
+    #[primary_key]
+    id: u64,
+    account_id: u64,
+}
+
+#[derive(Database)]
+struct Ledger {
+    accounts: Table&lt;Account&gt;,
+    audits: Table&lt;Audit&gt;,
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    let db = Ledger::memory();
+    db.accounts.insert(Account {
+        id: 1,
+        balance: 100,
+    })?;
+    db.write(|tx| {
+        tx.accounts.update(&amp;1, |account| account.balance -= 25)?;
+        tx.audits.insert(Audit {
+            id: 1,
+            account_id: 1,
+        })?;
+        Ok(())
+    })?;
+    assert_eq!(db.accounts.get(&amp;1).unwrap().balance, 75);
+    assert_eq!(db.audits.get(&amp;1).unwrap().account_id, 1);
+    Ok(())
+}
+
+</code></pre></div></section><section><h2 id="snapshot---mvcc-semantics">Snapshot / MVCC Semantics</h2><p>保証はSnapshot Isolationです。snapshotは全Tableで同じcommit sequenceを保持し、repeatable readを提供します。write transactionは開始rootを基準にし、同一keyのversion変更をfirst-committer-winsで拒否します。predicate read-setは追跡せずSerializableではありません。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-rust">// included from crates/monstermemory/examples/snapshots.rs
+#![allow(missing_docs)]
+
+use monstermemory::prelude::*;
+
+#[derive(Clone, Debug, Table)]
+struct Counter {
+    #[primary_key]
+    id: u64,
+    value: u64,
+}
+
+#[derive(Database)]
+struct CounterDb {
+    counters: Table&lt;Counter&gt;,
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    let db = CounterDb::memory();
+    db.counters.insert(Counter { id: 1, value: 1 })?;
+    let before = db.snapshot();
+    db.counters.update(&amp;1, |counter| counter.value = 2)?;
+    assert_eq!(before.counters.get(&amp;1).unwrap().value, 1);
+    assert_eq!(db.counters.get(&amp;1).unwrap().value, 2);
+    Ok(())
+}
+
+</code></pre></div></section><section><h2 id="concurrency-model">Concurrency Model</h2><p>primary lookupはArcSwapからimmutable rootをloadし、writerのcommit mutexを取得しません。snapshot/query作成時は保持状態をmetricsへ登録するmutexを取得します。writerはtransaction-local write-setを準備後、commit gateでconflict/unique/validatorを検査し、DB rootを一度だけpublishします。永続化時はWALのエンコードとI/Oもgate内で行うため、writerの待ち時間はストレージ性能にも依存します。writer publicationはserializedです。</p></section><section><h2 id="error-handling">Error Handling</h2><p>public <code>Result&lt;T&gt;</code>はnon-generic <code>Error</code>を使います。<code>DuplicatePrimaryKey</code>、<code>UniqueIndexViolation</code>、<code>NotFound</code>、<code>WriteConflict</code>、<code>PrimaryKeyChanged</code>、<code>SchemaMismatch</code>、<code>CorruptData</code>、<code>Io</code>、<code>Configuration</code>があります。<code>is_retryable()</code>は現在<code>WriteConflict</code>だけtrueです。</p></section><section><h2 id="validation">Validation</h2><p><code>#[database(validate = &quot;validate_database&quot;)]</code>でcandidate snapshotを受けるcross-table validatorを設定できます。validator失敗時はpublishされません。row validation専用attributeとincremental foreign keyは今後の課題です。</p></section><section><h2 id="persistence---durability">Persistence / Durability</h2><p><code>persistence</code> featureと<code>#[database(persistence)]</code>を指定し、recordにSerde Serialize/Deserializeをderiveすると<code>open</code>と<code>checkpoint</code>が生成されます。formatはmagic、u16 version、schema fingerprint、little-endian length、CRC32、postcard payloadです。<code>open</code>はcheckpointを検査後、存在するWALの最新の完全なimageを優先して復元し、そのインスタンスの以後のwriteをFsync付きWALへ記録します。<code>memory</code>は永続化hookを設定しません。同じpathを複数のdatabaseインスタンスやプロセスで共有しないでください。</p><p>低レベルAPIのDurabilityはAsync、Flush、Fsyncです。AsyncとFlushのWAL処理は現実装では同じであり、Asyncも同期I/Oです。checkpointのatomic置換は依存ライブラリ側でも同期を行います。完全な電源断耐性の保証は行いません。</p><p>不完全なWAL末尾は復旧時に読み飛ばすだけで、自動修復しません。異常終了後に<code>open</code>で復旧した場合は、同じpathへのcheckpointを成功させてから追加writeを行ってください。残った末尾の後ろへappendすると、その後のcommitを復旧できなくなる場合があります。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-rust">// included from crates/monstermemory/examples/persistence.rs
+#![allow(missing_docs)]
+
+use monstermemory::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Deserialize, Serialize, Table)]
+struct Setting {
+    #[primary_key]
+    id: u64,
+    value: String,
+}
+
+#[derive(Database)]
+#[database(persistence)]
+struct SettingsDb {
+    settings: Table&lt;Setting&gt;,
+}
+
+fn main() -&gt; Result&lt;()&gt; {
+    let path = std::env::temp_dir().join(&quot;monstermemory-persistence-example.bin&quot;);
+    let db = SettingsDb::memory();
+    db.settings.insert(Setting {
+        id: 1,
+        value: &quot;safe&quot;.into(),
+    })?;
+    db.checkpoint(&amp;path)?;
+    let reopened = SettingsDb::open(&amp;path)?;
+    assert_eq!(reopened.settings.get(&amp;1).unwrap().value, &quot;safe&quot;);
+    std::fs::remove_file(path)?;
+    Ok(())
+}
+
+</code></pre></div></section><section><h2 id="schema-evolution">Schema Evolution</h2><p>保存したfingerprintの不一致は<code>SchemaMismatch</code>です。ただしdatabaseのfingerprintはdatabase型名・table field名・record型の表記から算出し、recordの全field定義やSerde設定を含みません。同じrecord型名のままfieldを変更すると一致し得るため、一致だけでschema互換とは判断できません。schema変更時は互換性を利用側で確認してください。自動migrationはありません。</p></section><section><h2 id="compaction---memory-reclamation">Compaction / Memory Reclamation</h2><p>old root/record/index nodeはArc到達可能性で安全に回収されます。snapshotを長く保持すると回収が遅れるためactive snapshot数とoldest ageをmetricsで確認できます。slot再利用、tombstone compaction、background compactionは未実装です。</p></section><section><h2 id="performance-tuning">Performance Tuning</h2><p>default設定で開始してください。single readの反復ではexplicit snapshotを再利用するとroot reloadを避けられます。大量初期化は<code>bulk_load</code>、複数変更はbatch/transactionを使います。memory limit builderは0を拒否するだけで使用量を制限しません。snapshot_warning_afterも自動通知を設定しません。</p></section><section><h2 id="metrics---tracing">Metrics / Tracing</h2><p><code>db.metrics()</code>はcommit sequence、active snapshots、oldest snapshot age、commits、conflicts、unique violations、changed index paths、tombstonesを返します。read hot pathにcounter/loggingは置きません。tracing adapterとretained bytesは未実装です。</p></section><section><h2 id="testing-strategy">Testing Strategy</h2><p>unit、integration、BTreeMap differential property test、concurrent readers/writers、first-committer-wins、trybuild UI、Loom縮約model、corrupt checkpointを検証します。seed失敗時はproptest regressionを保存できます。fuzz entryは<code>fuzz/fuzz_targets/checkpoint_decoder.rs</code>です。</p></section><section><h2 id="architecture">Architecture</h2><p>Read path: ArcSwap root → chunked primary hash → Arc record。Index path: ArcSwap/snapshot root → persistent ordered index → RowId → persistent record directory。Write path: base root → typed write-set → commit gate → version/unique/validation → atomic root publish。</p><div class="code"><button class="copy" aria-label="コードをコピー">Copy</button><pre><code class="language-text">READ:   ArcSwap root ──&gt; TableRoot ──&gt; primary shard ──&gt; Arc&lt;Record&gt;
+RANGE:  SnapshotLease ─&gt; ordered index ─&gt; RowId ───────&gt; record directory
+WRITE:  base root ─────&gt; typed write-set ─&gt; commit gate ─&gt; candidate ─&gt; publish
+LIFE:   old root ──────&gt; retained snapshot ─&gt; drop ─────&gt; Arc reclamation
+CRASH:  commit ────────&gt; WAL frame + CMIT ─&gt; publish; open ─&gt; replay latest frame
+</code></pre></div></section><section><h2 id="safety-invariants">Safety Invariants</h2><p>published rootはimmutable、snapshotが到達可能なobjectは解放しない、candidateはvalidation完了前にpublishしない、persistence inputはlength/checksum検査後にdecodeする、workspace独自codeはunsafe禁止、が主要invariantです。</p></section><section><h2 id="benchmark-methodology-and-results">Benchmark Methodology and Results</h2><p><code>cargo bench -p monstermemory --bench read_path</code>をrelease profile、100K rows、2M random lookupsで実行します。2026-08-13のWindows x86_64測定ではHashMap 30.76ns、RwLock HashMap 33.56ns、live get 100.38ns、snapshot get 64.15nsでした。1.50倍KPIは未達です。詳細はrepository rootの<code>BENCHMARK_REPORT.md</code>です。</p></section><section><h2 id="migration-guide">Migration Guide</h2><p>0.1 alpha以前の公開versionはありません。将来のmigrationではgenerated method名、feature flags、checkpoint format version、schema fingerprintをsemver/compatibility review対象にします。</p></section><section><h2 id="troubleshooting">Troubleshooting</h2><p>missing primary errorは1 fieldへ<code>#[primary_key]</code>を追加します。index trait bound errorはfieldをIndexValue対応型へするか、明示的なcanonical encoding対応を待ちます。WriteConflictは新transactionでclosureを再構築します。SchemaMismatch時にfileを無理にdecodeしないでください。</p></section><section><h2 id="faq">FAQ</h2><p>SQL、network server、distributed replication、cross-process shared memory、full ORMはありますか: ありません。Readerはwait-freeですか: MonsterMemory自身として形式保証は表明せず、ArcSwapのupstream保証範囲に依存します。Serializableですか: いいえ、Snapshot Isolationです。</p></section><section><h2 id="feature-flags">Feature Flags</h2><p>defaultはmemory-onlyです。<code>persistence</code>はportable checkpoint crate、Serde integration、generated open/checkpointを有効にします。experimental serializableやasync runtime featureはありません。</p></section><section><h2 id="msrv---platform-support">MSRV / Platform Support</h2><p>editionはRust 2024、MSRVは1.88、検証toolchainは1.94.1です。CI matrixはWindows/Linux/macOS current stableとMSRVを定義します。coreはTokioを必要としません。</p></section><section><h2 id="security---corrupt-input-handling">Security / Corrupt Input Handling</h2><p>container readerはpayloadの符号化サイズを既定1GiB上限、checked length、CRC32で検査し、checkpointではexact file sizeも検査します。WALは不完全な最終frameを許容します。Serdeのdecode時に作るobjectのメモリ使用量まで制限するものではありません。CRC32は認証ではありません。脆弱性の報告手順はrepository rootのSECURITY.mdを参照してください。</p></section><section><h2 id="api-reference">API Reference</h2><p><code>cargo doc -p monstermemory -p monstermemory-core -p monstermemory-macros -p monstermemory-persistence --features monstermemory/persistence --no-deps</code>でlocal API referenceを生成します。source-of-truthはcrate rustdocとcompileされるexamplesです。</p></section></main></div><script>
+document.querySelectorAll('.copy').forEach(b=>b.addEventListener('click',()=>navigator.clipboard.writeText(b.nextElementSibling.innerText).then(()=>{b.textContent='Copied'})));
+document.getElementById('search').addEventListener('input',e=>{let q=e.target.value.toLowerCase();document.querySelectorAll('main section').forEach(s=>s.hidden=q&&!s.innerText.toLowerCase().includes(q))});
+</script></body></html>

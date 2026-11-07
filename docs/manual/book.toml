@@ -1,0 +1,8 @@
+[book]
+title = "MonsterMemory 開発者マニュアル"
+language = "ja"
+src = "src"
+
+[build]
+build-dir = "html"
+

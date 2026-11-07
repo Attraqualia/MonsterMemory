@@ -1,0 +1,20 @@
+[package]
+name = "monstermemory-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+monstermemory-persistence = { path = "../crates/monstermemory-persistence" }
+
+[[bin]]
+name = "checkpoint_decoder"
+path = "fuzz_targets/checkpoint_decoder.rs"
+test = false
+doc = false
+bench = false
+

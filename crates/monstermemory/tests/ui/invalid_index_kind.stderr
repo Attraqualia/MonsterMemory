@@ -1,0 +1,5 @@
+error: invalid composite index kind; the supported kind is "ordered"
+ --> tests/ui/invalid_index_kind.rs:4:1
+  |
+4 | #[composite_index(name = "bad", fields(country, age), kind = "hash")]
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

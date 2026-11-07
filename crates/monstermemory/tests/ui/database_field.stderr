@@ -1,0 +1,5 @@
+error: database fields must have type Table<Record>
+ --> tests/ui/database_field.rs:5:12
+  |
+5 |     value: u64,
+  |            ^^^

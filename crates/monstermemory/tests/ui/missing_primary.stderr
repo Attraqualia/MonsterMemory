@@ -1,0 +1,5 @@
+error: missing primary key; add #[primary_key] to exactly one field
+ --> tests/ui/missing_primary.rs:4:8
+  |
+4 | struct MissingPrimary {
+  |        ^^^^^^^^^^^^^^

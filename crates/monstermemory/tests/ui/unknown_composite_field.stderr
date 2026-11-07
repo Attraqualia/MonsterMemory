@@ -1,0 +1,5 @@
+error: composite index `bad` refers to unknown field `missing`
+ --> tests/ui/unknown_composite_field.rs:4:49
+  |
+4 | #[composite_index(name = "bad", fields(country, missing), kind = "ordered")]
+  |                                                 ^^^^^^^

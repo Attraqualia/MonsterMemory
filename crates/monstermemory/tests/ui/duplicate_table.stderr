@@ -1,0 +1,11 @@
+error: the same table record type `Row` is registered twice
+  --> tests/ui/duplicate_table.rs:12:13
+   |
+12 |     second: Table<Row>,
+   |             ^^^^^^^^^^
+
+error: the first registration is here
+  --> tests/ui/duplicate_table.rs:11:12
+   |
+11 |     first: Table<Row>,
+   |            ^^^^^

@@ -1,0 +1,11 @@
+error: duplicate index name `same`
+ --> tests/ui/duplicate_index.rs:9:5
+  |
+9 |     #[index(name = "same")]
+  |     ^
+
+error: the first index with this name is here
+ --> tests/ui/duplicate_index.rs:7:5
+  |
+7 |     #[index(name = "same")]
+  |     ^

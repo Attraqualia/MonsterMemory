@@ -1,0 +1,57 @@
+[package]
+name = "monstermemory"
+description = "An ergonomic typed MVCC in-memory database for Rust"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme = "../../README.md"
+
+[features]
+default = []
+persistence = ["dep:monstermemory-persistence", "dep:serde"]
+
+[dependencies]
+monstermemory-core = { path = "../monstermemory-core", version = "0.1.0-alpha.1" }
+monstermemory-macros = { path = "../monstermemory-macros", version = "0.1.0-alpha.1" }
+monstermemory-persistence = { path = "../monstermemory-persistence", version = "0.1.0-alpha.1", optional = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+allocation-counter = "0.8.1"
+proptest = "1.11.0"
+serde.workspace = true
+trybuild = "1.0.120"
+
+[lints]
+workspace = true
+
+[[example]]
+name = "quickstart"
+path = "examples/quickstart.rs"
+
+[[example]]
+name = "indexes"
+path = "examples/indexes.rs"
+
+[[example]]
+name = "transactions"
+path = "examples/transactions.rs"
+
+[[example]]
+name = "snapshots"
+path = "examples/snapshots.rs"
+
+[[example]]
+name = "persistence"
+path = "examples/persistence.rs"
+required-features = ["persistence"]
+
+[[bench]]
+name = "read_path"
+path = "benches/read_path.rs"
+harness = false

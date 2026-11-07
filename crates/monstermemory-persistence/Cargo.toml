@@ -1,0 +1,19 @@
+[package]
+name = "monstermemory-persistence"
+description = "Stable checkpoint container for MonsterMemory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+atomic-write-file.workspace = true
+crc32fast.workspace = true
+monstermemory-core = { path = "../monstermemory-core", version = "0.1.0-alpha.1" }
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true
